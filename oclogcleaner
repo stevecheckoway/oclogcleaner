@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+
+"""
+Cleans `SystemSerialNumber`, `MLB`, and `SystemUUID` from log files.
+Usage: ./oclogcleaner [-c CONFIG_PATH] <path to OC log>...
+Options:
+    -c CONFIG_PATH Path to config.plist file, defaults to /Volumes/EFI/EFI/OC/config.plist
+"""
+
+import argparse
+import plistlib
+import os.path
+
+
+def main():
+    """
+    Run the program.
+    """
+    parser = argparse.ArgumentParser(
+        prog="oclogcleaner",
+        description="Cleans `SystemSerialNumber`, `MLB`, and `SystemUUID` from log files")
+    parser.add_argument("-c", "--config",
+                        default='/Volumes/EFI/EFI/OC/config.plist',
+                        help="specify config.plist")
+    parser.add_argument("logs", help="path to log files", nargs="+")
+
+    args = parser.parse_args()
+    to_clean = parse_config(args.config)
+
+    for log in args.logs:
+        clean_log(log, to_clean)
+
+
+def parse_config(path):
+    """
+    Parse config.plist and return the set of values to clean.
+    """
+    with open(path, 'rb') as config_file:
+        config = plistlib.load(config_file)
+        generic = config['PlatformInfo']['Generic']
+        to_clean = {
+            'SystemSerialNumber': generic.get('SystemSerialNumber'),
+            'MLB': generic.get('MLB'),
+            'SystemUUID': generic.get('SystemUUID')
+        }
+        return to_clean
+
+
+def clean_log(path, to_clean):
+    """
+    Remove the values in to_clean from the given log.
+    """
+    with open(path, 'r') as log_file:
+        log = log_file.read()
+    for key, value in to_clean.items():
+        if not value:
+            continue
+        log = log.replace(value, f'${{{ key }}}')
+
+    base = os.path.basename(path)
+    base, ext = os.path.splitext(base)
+    new_path = f'{ base }-cleaned{ ext }'
+    with open(new_path, 'w') as output:
+        output.write(log)
+
+
+if __name__ == '__main__':
+    main()
